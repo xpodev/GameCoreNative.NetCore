@@ -57,19 +57,20 @@ namespace xpo {
 			{}
 
 			void read_async(uint8_t* const buffer, std::size_t count, std::function<void(std::error_code, std::size_t)> callback) override {
-				m_socket.async_receive_from(asio::buffer(buffer, count), m_remoteEndPoint, callback);
+				m_socket.async_receive_from(asio::buffer(buffer, count), m_remoteInEndPoint, callback);
 			}
 
 			void write_async(uint8_t* const buffer, std::size_t count, std::function<void(std::error_code, std::size_t)> callback) override {
-				m_socket.async_send_to(asio::buffer(buffer, count), m_remoteEndPoint, callback);
+				m_socket.async_send_to(asio::buffer(buffer, count), m_remoteOutEndPoint, callback);
 			}
 
 			asio::ip::udp::endpoint const& remote_endpoint() const {
-				return m_remoteEndPoint;
+				return m_remoteInEndPoint;
 			}
 
 		protected:
-			asio::ip::udp::endpoint m_remoteEndPoint;
+			asio::ip::udp::endpoint m_remoteInEndPoint;
+			asio::ip::udp::endpoint m_remoteOutEndPoint;
 			ASIO_UDP& m_socket;
 		};
 

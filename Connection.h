@@ -1,5 +1,6 @@
 #pragma once
 
+#include "./ASIOSocket.h"
 #include "./IAsyncIO.h"
 #include "./IQueue.h"
 #include "./ThreadSafeQueue.h"
@@ -49,13 +50,70 @@ namespace xpo {
 			}
 		};
 
+		template <IByteMessage T>
+		struct SentMessage : public T
+		{
+			SentMessage()
+				: T()
+				, m_endPoint()
+			{
+
+			}
+
+			SentMessage(T& msg, asio::ip::udp::endpoint const& endPoint)
+				: T(msg)
+				, m_endPoint(endPoint)
+			{
+				
+			}
+
+			asio::ip::udp::endpoint& endpoint() {
+				return m_endPoint;
+			}
+
+		private:
+			asio::ip::udp::endpoint m_endPoint;
+		};
+
+		template <IByteMessage T>
+		struct DefualtUDPMessageProcessor : public DefualtMessageProcessor<SentMessage<T>> {
+			uint32_t const MAX_MESSAGE_BODY_SIZE = 1024;
+
+			virtual void on_send(SentMessage<T>& msg) {
+				std::cout << "Sending: " << msg << std::endl;
+			}
+
+			virtual void on_receive(T& msg) {
+				std::cout << "Received: " << msg << std::endl;
+			}
+
+			bool on_receive_header(typename T::header_type& header) {
+				// if the header says the message is too large, just drop it
+				if (header.size() > MAX_MESSAGE_BODY_SIZE) {
+					std::cout << "Message body size was too large: " << header.size() << std::endl;
+					return false;
+				}
+				return true;
+			}
+
+			virtual bool on_receive_fail(std::error_code ec) {
+				std::cout << "Receive Failed: " << ec.message() << std::endl;
+				return true;
+			}
+
+			virtual bool on_send_fail(std::error_code ec) {
+				std::cout << "Send Failed: " << ec.message() << std::endl;
+				return true;
+			}
+		};
+
 		template <
 			IByteMessage T,
 			std::derived_from<IAsyncByteIO> AsyncT = IAsyncByteIO,
 			MessageProcessor<T> P = DefualtMessageProcessor<T>,
 			IQueue<T> Q = ThreadSafeQueue<T>
 		>
-		struct Connection : private P, public AsyncT {
+		struct ConnectionBase : public P, public AsyncT {
 		public:
 			using AsyncT::AsyncT;
 
@@ -80,7 +138,7 @@ namespace xpo {
 				}
 			}
 
-			void header_receive_async() {
+			virtual void header_receive_async() {
 				this->read_async((uint8_t*)(&m_tempInMessage.header), sizeof(m_tempInMessage.header), [=](std::error_code ec, size_t length) {
 					if (!ec && length == sizeof(m_tempInMessage.header)) {
 						if (this->on_receive_header(m_tempInMessage.header)) {
@@ -104,7 +162,7 @@ namespace xpo {
 				});
 			}
 
-			void body_receive_async() {
+			virtual void body_receive_async() {
 				// TODO: there's got to be a better way than using the 'new' operator
 				uint8_t* buffer = new uint8_t[m_tempInMessage.header.size()];
 				this->read_async(buffer, m_tempInMessage.header.size(), [this, buffer](std::error_code ec, size_t length) {
@@ -123,7 +181,7 @@ namespace xpo {
 				});
 			}
 
-			void header_send_async() {
+			virtual void header_send_async() {
 				m_tempOutMessage = m_outQueue.pop_front();
 				this->on_send(m_tempOutMessage);
 				this->write_async((uint8_t*)(&m_tempOutMessage.header), sizeof(m_tempOutMessage.header), [this](std::error_code ec, size_t length) {
@@ -152,7 +210,7 @@ namespace xpo {
 					});
 			}
 
-			void body_send_async() {
+			virtual void body_send_async() {
 				this->write_async(m_tempOutMessage.data(), m_tempOutMessage.header.size(), [this](std::error_code ec, size_t length) {
 					if (!ec && length == m_tempOutMessage.header.size()) {
 						if (!m_outQueue.empty()) {
@@ -167,10 +225,30 @@ namespace xpo {
 					});
 			}
 
-		private:
+		protected:
 			T m_tempInMessage;
 			T m_tempOutMessage;
 			Q m_outQueue;
+		};
+
+		template <IByteMessage T>
+		struct TCPConnection : public ConnectionBase<T, ASIOAsyncTCPSocket, DefualtMessageProcessor<T>, ThreadSafeQueue<T>> {
+			using ConnectionBase<T, ASIOAsyncTCPSocket, DefualtMessageProcessor<T>, ThreadSafeQueue<T>>::ConnectionBase;
+		};
+
+		template <IByteMessage T>
+		struct UDPConnection : public ConnectionBase<SentMessage<T>, ASIOAsyncUDPSocket, DefualtUDPMessageProcessor<T>, ThreadSafeQueue<SentMessage<T>>> {
+			using ConnectionBase<SentMessage<T>, ASIOAsyncUDPSocket, DefualtUDPMessageProcessor<T>, ThreadSafeQueue<SentMessage<T>>>::ConnectionBase;
+
+			void header_send_async() override {
+				this->m_tempOutMessage = this->m_outQueue.front();
+				this->m_remoteOutEndPoint = this->m_tempOutMessage.endpoint();
+				ConnectionBase<SentMessage<T>, ASIOAsyncUDPSocket, DefualtUDPMessageProcessor<T>, ThreadSafeQueue<SentMessage<T>>>::header_send_async();
+			}
+
+			void send_message_to(T const& msg, asio::ip::udp::endpoint& endPoint) {
+				this->send_message(SentMessage(msg, endPoint));
+			}
 		};
 	}
 }
