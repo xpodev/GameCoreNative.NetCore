@@ -4,7 +4,7 @@
 
 
 namespace xpo {
-	namespace Net {
+	namespace net {
 		template <class DataType, IMessage<DataType> M, class = void>
 		struct SerializeType
 		{

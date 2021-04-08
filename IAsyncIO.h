@@ -5,7 +5,7 @@
 #include <system_error>
 
 namespace xpo {
-	namespace Net {
+	namespace net {
 		template <class IOType>
 		struct IAsyncIO {
 		public:

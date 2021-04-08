@@ -7,7 +7,7 @@
 
 
 namespace xpo {
-	namespace Net {
+	namespace net {
 		template <class T>
 		class Deque : public std::deque<T> {
 		public:

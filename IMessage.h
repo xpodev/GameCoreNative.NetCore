@@ -7,7 +7,7 @@
 
 
 namespace xpo {
-	namespace Net {
+	namespace net {
 		template <class T>
 		concept IMessageHeader = requires (T hdr) {
 			{ hdr.size() } -> std::convertible_to<std::size_t>; // returns the size of the body

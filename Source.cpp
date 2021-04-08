@@ -15,7 +15,7 @@
 #include "ASIOSocket.h"
 
 
-using namespace xpo::Net;
+using namespace xpo::net;
 
 
 enum class Commands {

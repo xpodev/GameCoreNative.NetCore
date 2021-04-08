@@ -7,7 +7,7 @@
 #include "./IAsyncIO.h"
 
 namespace xpo {
-	namespace Net {
+	namespace net {
 		template <class T>
 		struct is_asio_socket : std::false_type {};
 

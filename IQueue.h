@@ -5,7 +5,7 @@
 
 
 namespace xpo {
-	namespace Net {
+	namespace net {
 		template <class T, class Ty>
 		concept IQueue = requires (T q, Ty & v, Ty const& vc) {
 			{ q.front() } -> std::same_as<Ty const&>;

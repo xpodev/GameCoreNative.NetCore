@@ -5,7 +5,7 @@
 
 
 namespace xpo {
-	namespace Net {
+	namespace net {
 		template <class T>
 		concept IServer = requires (T& t) {
 			t.start(std::declval<uint16_t>());

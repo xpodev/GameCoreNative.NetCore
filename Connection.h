@@ -6,7 +6,7 @@
 
 
 namespace xpo {
-	namespace Net {
+	namespace net {
 		template <class T, class M>
 		concept MessageProcessor = requires (T proc, M& msg, std::error_code ec) {
 			requires IByteMessage<M>;

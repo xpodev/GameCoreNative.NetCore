@@ -4,7 +4,7 @@
 
 
 namespace xpo {
-	namespace Net {
+	namespace net {
 		template <class T, class M>
 		concept IConnection = requires (T conn, M& msg) {
 			requires IByteMessage<M>;

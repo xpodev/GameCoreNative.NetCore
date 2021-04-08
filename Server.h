@@ -4,7 +4,7 @@
 
 
 namespace xpo {
-	namespace Net {
+	namespace net {
 		template <IByteMessage M, IConnection<M> T>
 		struct SingleSocketServer {
 			void start() {
