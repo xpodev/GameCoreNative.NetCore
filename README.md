@@ -1,0 +1,1 @@
+# GameCoreNative.NetCore
