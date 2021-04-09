@@ -19,6 +19,7 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Errors.h" />
     <ClInclude Include="IAsyncIO.h" />
     <ClInclude Include="Connection.h" />
     <ClInclude Include="ASIOSocket.h" />
