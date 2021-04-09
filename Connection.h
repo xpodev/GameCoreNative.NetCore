@@ -1,6 +1,7 @@
 #pragma once
 
 #include "./ASIOSocket.h"
+#include "./Errors.h"
 #include "./IAsyncIO.h"
 #include "./IMessage.h"
 #include "./IQueue.h"
@@ -18,19 +19,9 @@ namespace xpo {
 			requires IByteMessage<M>;
 			proc.on_receive(msg);
 			proc.on_send(msg);
+			{ proc.on_receive_header(msg.header) } -> std::same_as<bool>; // return value indicates whether to drop the packet.
 			{ proc.on_receive_fail(ec) } -> std::same_as<bool>; // return value indicates whether to continue listening.
 			{ proc.on_send_fail(ec) } -> std::same_as<bool>; // return value indicates whether to continue listening.
-		};
-
-		template <class T, class M>
-		concept ITCPMessageProcessor = requires (T proc, M & msg, std::error_code ec) {
-			requires IMessageProcessor<T, M>;
-			{ proc.on_receive_header(msg.header) } -> std::same_as<bool>; // return value indicates whether to drop the packet.
-		};
-
-		template <class T, class M>
-		concept IUDPMessageProcessor = requires (T proc, M & msg, std::error_code ec) {
-			requires IMessageProcessor<T, M>;
 		};
 
 		template <IByteMessage T>
@@ -66,7 +57,7 @@ namespace xpo {
 				std::cout << "Received: " << msg << std::endl;
 			}
 
-			bool on_receive_header(typename T::header_type& header) {
+			virtual bool on_receive_header(typename T::header_type& header) {
 				// if the header says the message is too large, just drop it
 				if (header.size() > MAX_MESSAGE_BODY_SIZE) {
 					std::cout << "Message body size was too large: " << header.size() << std::endl;
@@ -92,12 +83,23 @@ namespace xpo {
 
 		template <IByteMessage T>
 		struct UDPMessageProcessor {
+			static inline constexpr size_t const MAX_MESSAGE_BODY_SIZE = 1024;
+
 			virtual void on_send(OwnedMessage<T>& msg) {
 				std::cout << "Sending: " << msg << std::endl;
 			}
 
 			virtual void on_receive(T& msg) {
 				std::cout << "Received: " << msg << std::endl;
+			}
+
+			virtual bool on_receive_header(typename T::header_type& header) {
+				// if the header says the message is too large, just drop it
+				if (header.size() > MAX_MESSAGE_BODY_SIZE) {
+					std::cout << "Message body size was too large: " << header.size() << std::endl;
+					return false;
+				}
+				return true;
 			}
 
 			virtual bool on_receive_fail(std::error_code ec) {
@@ -319,8 +321,9 @@ namespace xpo {
 			void message_receive_async() {
 				this->read_async(m_inBuffer, m_inBufferSize, [this](std::error_code ec, size_t length) {
 					if (!ec) {
-						parse_message_from_byte_stream(length);
-						message_receive_async();
+						if (parse_message_from_byte_stream(length)) {
+							message_receive_async();
+						}
 					}
 					else {
 						if (this->on_receive_fail(ec)) {
@@ -330,19 +333,28 @@ namespace xpo {
 				});
 			}
 
-			void parse_message_from_byte_stream(size_t bytesReceived) {
+			bool parse_message_from_byte_stream(size_t bytesReceived) {
 				// otherwise, try to parse a new message
 				// we should pasre the whole buffer, since it is being overwriten every time we receive
 
 				uint8_t* begin = m_inBuffer;
 				uint8_t* end = begin + bytesReceived;
+				constexpr size_t const sizeOfHeader = sizeof(this->m_tempInMessage.header);
+				bytesReceived -= sizeOfHeader;
 				// we are not parsing a message write now, lets parse a new one
 				while (begin != end) {
 					if (m_remainingBytesForCurrentMessage == 0) {
+						if (end - begin < sizeOfHeader) {
+							return this->on_receive_fail(make_error_code(ErrorCode::InvalidHeader));
+						}
 						this->m_tempInMessage.clear();
-						std::memcpy(&this->m_tempInMessage.header, begin, sizeof(this->m_tempInMessage.header));
-						begin += sizeof(this->m_tempInMessage.header);
+						std::memcpy(&this->m_tempInMessage.header, begin, sizeOfHeader);
 						m_remainingBytesForCurrentMessage = this->m_tempInMessage.header.size();
+						if ((m_remainingBytesForCurrentMessage < m_inBufferSize && m_remainingBytesForCurrentMessage > bytesReceived) || !this->on_receive_header(this->m_tempInMessage.header)) {
+							m_remainingBytesForCurrentMessage = 0;
+							return this->on_receive_fail(make_error_code(ErrorCode::InvalidHeader));
+						}
+						begin += sizeOfHeader;
 					}
 					uint8_t* endOfMessageBuffer = std::min(end, begin + m_remainingBytesForCurrentMessage);
 					size_t count = endOfMessageBuffer - begin;
@@ -355,6 +367,8 @@ namespace xpo {
 
 					begin += count;
 				}
+
+				return true;
 			}
 
 			size_t m_inBufferSize = CONNECTION_UDP_DEFAULT_BUFFER_SIZE;
