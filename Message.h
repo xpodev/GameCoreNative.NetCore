@@ -44,9 +44,14 @@ namespace xpo {
 				return m_body.data();
 			}
 
-			void data(uint8_t* d, size_t length) {
-				m_body.resize(length);
-				std::memcpy(m_body.data(), d, length);
+			void add_data(uint8_t* data, size_t length) {
+				size_t lastSize = m_body.size();
+				m_body.resize(lastSize + length);
+				std::memcpy(m_body.data() + lastSize, data, length);
+			}
+
+			void clear() {
+				m_body.clear();
 			}
 
 			template <class DataType>

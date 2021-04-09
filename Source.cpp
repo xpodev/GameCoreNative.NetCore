@@ -30,13 +30,13 @@ using ProtocolHandlers = std::map < T, bool(Message<T>&)>;
 using MyProtocol = ProtocolHandlers<Commands>;
 
 using GameMessage = Message<Commands>;
-//using GameConnection = ConnectionBase<SentMessage<GameMessage>, ASIOAsyncUDPSocket, DefualtUDPMessageProcessor<GameMessage>, ThreadSafeQueue<SentMessage<GameMessage>>>;
+//using GameConnection = ConnectionBase<OwnedMessage<GameMessage>, ASIOAsyncUDPSocket, DefualtUDPMessageProcessor<GameMessage>, ThreadSafeQueue<OwnedMessage<GameMessage>>>;
 using GameConnection = UDPConnection<GameMessage>;
 
 
 struct ServerConnection : public GameConnection {
 public:
-	ServerConnection(ASIO_UDP& socket, ThreadSafeQueue<SentMessage<GameMessage>>& queue)
+	ServerConnection(ASIO_UDP& socket, ThreadSafeQueue<OwnedMessage<GameMessage>>& queue)
 		: m_inQueue(queue)
 		, GameConnection(socket)
 	{
@@ -45,7 +45,7 @@ public:
 
 	void on_receive(GameMessage& msg) override {
 		std::cout << "Message from: " << this->remote_endpoint() << std::endl;
-		auto smsg = SentMessage<GameMessage>(msg, this->remote_endpoint());
+		auto smsg = OwnedMessage<GameMessage>(msg, this->remote_endpoint());
 		m_inQueue.push_back(smsg);
 	}
 
@@ -53,28 +53,28 @@ public:
 		: ServerConnection(sc.m_socket, sc.m_inQueue)
 	{}
 
-	ThreadSafeQueue<SentMessage<GameMessage>>& incoming() {
+	ThreadSafeQueue<OwnedMessage<GameMessage>>& incoming() {
 		return m_inQueue;
 	}
 
 private:
-	ThreadSafeQueue<SentMessage<GameMessage>>& m_inQueue;
+	ThreadSafeQueue<OwnedMessage<GameMessage>>& m_inQueue;
 };
 
 
 GameMessage msg;
-ThreadSafeQueue<SentMessage<GameMessage>> q;
+ThreadSafeQueue<OwnedMessage<GameMessage>> q;
 asio::io_context ctx = asio::io_context();
-asio::ip::udp::socket sock = asio::ip::udp::socket{ ctx, asio::ip::udp::endpoint(asio::ip::udp::v4(), 80) };
+asio::ip::udp::socket sock = asio::ip::udp::socket{ ctx, asio::ip::udp::endpoint(asio::ip::udp::v4(), 3741) };
 ServerConnection conn = ServerConnection{ sock, q };
 
 
-void protocol_core(ThreadSafeQueue<SentMessage<GameMessage>>& q) {
+void protocol_core(ThreadSafeQueue<OwnedMessage<GameMessage>>& q) {
 	while (true)
 	{
 		q.wait();
 		auto msg = q.pop_front();
-		std::cout << "Sending to: " << msg.endpoint() << std::endl;
+		std::cout << "Sending " << msg <<  " to: " << msg.endpoint() << std::endl;
 		conn.send_message(msg);
 	}
 }

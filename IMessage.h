@@ -22,7 +22,8 @@ namespace xpo {
 			{ msg.header } -> std::convertible_to<typename T::header_type>;
 			requires IMessageHeader<typename T::header_type>;
 			{ msg.data() } -> std::convertible_to<uint8_t*>;
-			msg.data(std::declval<uint8_t*>(), std::declval<std::size_t>());
+			msg.add_data(std::declval<uint8_t*>(), std::declval<std::size_t>());
+			msg.clear();
 		};
 
 		template <class T, class V>
